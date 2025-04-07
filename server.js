@@ -729,6 +729,12 @@ app.post('/api/designs', async (req, res) => {
             fs.mkdirSync(designFolderPath, { recursive: true });
         }
         
+        // 创建设计专属资源文件夹
+        const designAssetsPath = path.join(designFolderPath, 'assets');
+        if (!fs.existsSync(designAssetsPath)) {
+            fs.mkdirSync(designAssetsPath, { recursive: true });
+        }
+        
         // 获取base64图片数据
         const previewBase64Data = previewUrl.replace(/^data:image\/png;base64,/, '');
         
@@ -746,6 +752,42 @@ app.post('/api/designs', async (req, res) => {
         
         fs.writeFileSync(fullImageFullPath, previewBase64Data, 'base64');
         
+        // 处理对象中的图片，将uploads目录下的图片复制到设计专属文件夹
+        const processedObjects = Array.isArray(objects) ? [...objects] : (objects ? [objects] : []);
+        
+        for (let i = 0; i < processedObjects.length; i++) {
+            const obj = processedObjects[i];
+            
+            // 检查是否存在src属性，且是否指向uploads目录
+            if (obj.src && obj.src.includes('/uploads/')) {
+                try {
+                    // 提取文件名
+                    const fileName = path.basename(obj.src);
+                    
+                    // 源文件路径
+                    const srcFilePath = path.join(__dirname, 'public', obj.src.replace(/^http:\/\/localhost:\d+/, ''));
+                    
+                    // 目标文件路径（设计专属文件夹）
+                    const targetFileName = `asset_${i}_${fileName}`;
+                    const targetRelativePath = path.join('designs', designId, 'assets', targetFileName);
+                    const targetFullPath = path.join(__dirname, 'public', targetRelativePath);
+                    
+                    // 复制文件
+                    if (fs.existsSync(srcFilePath)) {
+                        fs.copyFileSync(srcFilePath, targetFullPath);
+                        console.log(`已将素材从 ${srcFilePath} 复制到 ${targetFullPath}`);
+                        
+                        // 更新对象中的src路径
+                        processedObjects[i].src = `/${targetRelativePath.replace(/\\/g, '/')}`;
+                    } else {
+                        console.warn(`素材文件不存在: ${srcFilePath}`);
+                    }
+                } catch (copyError) {
+                    console.error('复制素材文件失败:', copyError);
+                }
+            }
+        }
+        
         // 保存设计数据JSON文件
         const designDataFilename = 'design.json';
         const designDataPath = path.join(designFolderPath, designDataFilename);
@@ -758,11 +800,11 @@ app.post('/api/designs', async (req, res) => {
             height,
             createdAt: new Date().toISOString(),
             folderPath: `/designs/${designId}/`,
-            previewUrl: `/${previewRelativePath}`,
-            fullImageUrl: `/${fullImageRelativePath}`,
+            previewUrl: `/${previewRelativePath.replace(/\\/g, '/')}`,
+            fullImageUrl: `/${fullImageRelativePath.replace(/\\/g, '/')}`,
             isTransparentBg: !!isTransparentBg,
             templateId: templateId || null,
-            objects: Array.isArray(objects) ? objects : (objects ? [objects] : [])
+            objects: processedObjects
         };
         
         // 将完整设计数据保存到设计文件夹中的JSON文件

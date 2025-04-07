@@ -5,12 +5,16 @@ let canvas; // 将canvas变量声明为let而不是const，以便在initCanvas�
 let isTransparentBg = false;
 let isCroppingMode = false;
 let cropRect = null;
+let cropFabric = null; // 裁剪模式的canvas实例
+let cropSourceObject = null; // 要裁剪的原始图像对象
+let cropSourceImage = null; // 裁剪canvas中的图像
 let currentLayerId = 1;
 let backgroundImage = null; // 存储背景图像
 let currentTemplate = null;
 let uploadedImages = [];
 let isRulerVisible = false; // 添加标尺可见性变量
 let previewZoom = 1; // 添加预览缩放变量
+let isWindowVisible = true; // 添加窗口可见性标志
 
 // 全局变量 - 添加材料相关变量
 let materials = {
@@ -172,95 +176,107 @@ function toggleTransparentBg() {
     updateCanvasTransparency();
 }
 
-// 更新画布透明度显示
+// 更新画布透明度
 function updateCanvasTransparency() {
-    // 检查按钮和容器是否存在
-    const transparentBgBtn = document.getElementById('transparentBg');
-    const canvasContainer = document.getElementById('canvas-container');
-    
-    if (!transparentBgBtn || !canvasContainer) {
-        console.error('无法找到透明背景按钮或画布容器');
-        return;
-    }
+    const containerEl = document.getElementById('canvas-container');
+    if (!containerEl) return;
     
     // 更新按钮状态
-    if (isTransparentBg) {
-        transparentBgBtn.classList.add('active');
-    } else {
-        transparentBgBtn.classList.remove('active');
+    const transparentBtn = document.getElementById('transparentBg');
+    if (transparentBtn) {
+        transparentBtn.classList.toggle('active', isTransparentBg);
     }
     
+    console.log('更新透明背景状态:', isTransparentBg);
+    
+    // 处理透明背景
     if (isTransparentBg) {
-        // 设置透明背景
+        // 设置背景为透明
         canvas.backgroundColor = null;
+        canvas.renderAll();
         
-        // 添加透明背景网格
-        let gridPattern = document.getElementById('checker-pattern');
+        // 检查是否已存在棋盘格背景元素
+        let gridPattern = document.getElementById('transparent-grid-pattern');
+        
         if (!gridPattern) {
-            // 创建背景元素
-            const backgroundDiv = document.createElement('div');
-            backgroundDiv.id = 'checker-pattern';
-            backgroundDiv.className = 'canvas-checker-pattern';
+            // 创建棋盘格背景并添加到DOM
+            gridPattern = document.createElement('div');
+            gridPattern.id = 'transparent-grid-pattern';
+            gridPattern.className = 'transparent-grid-pattern';
             
-            // 设置背景样式确保显示灰白棋盘格
-            backgroundDiv.style.backgroundImage = `
-                linear-gradient(45deg, #e0e0e0 25%, transparent 25%), 
-                linear-gradient(-45deg, #e0e0e0 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #e0e0e0 75%), 
-                linear-gradient(-45deg, transparent 75%, #e0e0e0 75%)
-            `;
-            backgroundDiv.style.backgroundColor = '#ffffff';
-            backgroundDiv.style.backgroundSize = '20px 20px';
-            backgroundDiv.style.backgroundPosition = '0 0, 0 10px, 10px -10px, -10px 0px';
-            backgroundDiv.style.position = 'absolute';
-            backgroundDiv.style.top = '0';
-            backgroundDiv.style.left = '0';
-            backgroundDiv.style.width = '100%';
-            backgroundDiv.style.height = '100%';
-            backgroundDiv.style.zIndex = '-1';
-            backgroundDiv.style.pointerEvents = 'none';
-            
-            // 将背景元素插入到canvasContainer的最前面，确保在画布下方
-            if (canvasContainer.firstChild) {
-                canvasContainer.insertBefore(backgroundDiv, canvasContainer.firstChild);
-            } else {
-                canvasContainer.appendChild(backgroundDiv);
-            }
-            console.log('添加了透明背景图案');
-            gridPattern = backgroundDiv;
+            // 添加到容器中，放在canvas前面
+            containerEl.insertBefore(gridPattern, containerEl.firstChild);
+            console.log('创建了新的透明背景棋盘格元素');
         } else {
+            // 显示已存在的棋盘格
             gridPattern.style.display = 'block';
+            console.log('显示已存在的透明背景棋盘格元素');
         }
         
-        // 更新棋盘格位置
-        updateCheckerboardPosition();
+        // 立即更新棋盘格尺寸和位置
+        setTimeout(updateGridPatternSize, 0);
         
-        // 为画布容器添加事件监听，以确保在缩放或平移后更新棋盘格位置
-        canvas.on('mouse:wheel', updateCheckerboardPosition);
-        canvas.on('mouse:up', function() {
-            setTimeout(updateCheckerboardPosition, 0);
+        // 添加事件监听器
+        window.addEventListener('resize', updateGridPatternSize);
+        canvas.on('after:render', function() {
+            setTimeout(updateGridPatternSize, 0);
         });
-        window.addEventListener('resize', updateCheckerboardPosition);
     } else {
-        // 恢复白色背景
-        canvas.backgroundColor = '#ffffff';
+        // 设置回白色背景
+        canvas.backgroundColor = 'white';
+        canvas.renderAll();
         
-        // 隐藏透明背景网格
-        const gridPattern = document.getElementById('checker-pattern');
+        // 隐藏棋盘格
+        const gridPattern = document.getElementById('transparent-grid-pattern');
         if (gridPattern) {
             gridPattern.style.display = 'none';
         }
         
         // 移除事件监听器
-        canvas.off('mouse:wheel', updateCheckerboardPosition);
-        canvas.off('mouse:up', updateCheckerboardPosition);
-        window.removeEventListener('resize', updateCheckerboardPosition);
+        window.removeEventListener('resize', updateGridPatternSize);
+        canvas.off('after:render');
     }
+}
+
+// 更新棋盘格大小和位置
+function updateGridPatternSize() {
+    const gridPattern = document.getElementById('transparent-grid-pattern');
+    if (!gridPattern || gridPattern.style.display === 'none') return;
     
-    canvas.renderAll();
+    const containerEl = document.getElementById('canvas-container');
+    if (!containerEl) return;
     
-    // 更新实时预览
-    updatePreview();
+    const canvasEl = canvas.getElement();
+    if (!canvasEl) return;
+    
+    try {
+        // 获取canvas元素和容器的位置和尺寸
+        const canvasRect = canvasEl.getBoundingClientRect();
+        const containerRect = containerEl.getBoundingClientRect();
+        
+        // 确保棋盘格覆盖整个canvas区域
+        gridPattern.style.position = 'absolute';
+        gridPattern.style.width = `${canvasRect.width}px`;
+        gridPattern.style.height = `${canvasRect.height}px`;
+        gridPattern.style.left = `${canvasRect.left - containerRect.left}px`;
+        gridPattern.style.top = `${canvasRect.top - containerRect.top}px`;
+        gridPattern.style.zIndex = '-1';
+        
+        console.log('更新棋盘格尺寸和位置:', {
+            width: canvasRect.width,
+            height: canvasRect.height,
+            left: canvasRect.left - containerRect.left,
+            top: canvasRect.top - containerRect.top
+        });
+    } catch (error) {
+        console.error('更新棋盘格尺寸出错:', error);
+    }
+}
+
+// 更新棋盘格位置
+function updateCheckerboardPosition(forceUpdate = false) {
+    // 这个函数已被updateGridPatternSize取代，保留此函数避免引用错误
+    return updateGridPatternSize();
 }
 
 // 初始化素材列表
@@ -851,148 +867,513 @@ function addPolygon() {
 
 // 应用裁剪
 function applyCrop() {
-    if (!isCroppingMode || !cropRect) return;
-    
-    const activeObject = canvas.getActiveObject();
-    if (!activeObject || !(activeObject instanceof fabric.Image)) return;
-    
-    const overlay = document.getElementById('croppingOverlay');
-    const cropCanvas = document.getElementById('croppingCanvas');
-    const cropFabric = cropCanvas._fabric;
-    
-    if (!cropFabric) return;
-    
     try {
-        // 创建临时画布进行裁剪
+        console.log('应用裁剪...');
+        
+        // 检查是否在裁剪模式
+        if (!cropFabric || !cropRect || !cropSourceObject) {
+            console.error('没有处于裁剪模式或缺少必要的裁剪对象:', {
+                cropFabric: !!cropFabric,
+                cropRect: !!cropRect,
+                cropSourceObject: !!cropSourceObject
+            });
+            alert('裁剪失败：缺少必要的裁剪对象');
+            return;
+        }
+        
+        // 获取原始图像信息
+        const originalImgElement = cropSourceObject.getElement();
+        if (!originalImgElement) {
+            console.error('无法获取原始图像元素');
+            alert('裁剪失败：无法获取原始图像');
+            return;
+        }
+        
+        const originalWidth = originalImgElement.naturalWidth || cropSourceObject.width;
+        const originalHeight = originalImgElement.naturalHeight || cropSourceObject.height;
+        console.log('原始图像尺寸:', originalWidth, 'x', originalHeight);
+        
+        // 获取裁剪矩形的位置和尺寸
+        const scaleX = originalWidth / cropFabric.width;
+        const scaleY = originalHeight / cropFabric.height;
+        
+        // 获取裁剪框的实际尺寸和位置
+        const cropLeft = cropRect.left;
+        const cropTop = cropRect.top;
+        const cropWidth = cropRect.width * cropRect.scaleX;
+        const cropHeight = cropRect.height * cropRect.scaleY;
+        
+        // 裁剪原始图像 - 需要转换回原始尺寸坐标
+        const cropX = Math.round(cropLeft * scaleX);
+        const cropY = Math.round(cropTop * scaleY);
+        const cropRealWidth = Math.round(cropWidth * scaleX);
+        const cropRealHeight = Math.round(cropHeight * scaleY);
+        
+        console.log('裁剪区域 (显示尺寸):', cropLeft, cropTop, cropWidth, cropHeight);
+        console.log('裁剪区域 (原始尺寸):', cropX, cropY, cropRealWidth, cropRealHeight);
+        
+        // 创建临时canvas进行裁剪
         const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = cropRealWidth;
+        tempCanvas.height = cropRealHeight;
+        const ctx = tempCanvas.getContext('2d');
         
-        // 计算裁剪参数
-        const cropX = cropRect.left - cropRect.width / 2;
-        const cropY = cropRect.top - cropRect.height / 2;
-        
-        // 设置临时画布尺寸为裁剪区域大小
-        tempCanvas.width = cropRect.width;
-        tempCanvas.height = cropRect.height;
-        
-        // 获取裁剪图像对象
-        const imgObj = cropFabric.getObjects().find(obj => obj.type === 'image');
-        
-        if (!imgObj) return;
-        
-        // 将原图绘制到临时画布上，同时裁剪
-        tempCtx.drawImage(
-            imgObj._element,
-            cropX, cropY, cropRect.width, cropRect.height,
-            0, 0, cropRect.width, cropRect.height
-        );
-        
-        // 创建新图像
-        fabric.Image.fromURL(tempCanvas.toDataURL(), (newImg) => {
-            newImg.set({
-                left: activeObject.left,
-                top: activeObject.top,
-                name: activeObject.name + '(裁剪)',
-                id: generateLayerId()
+        // 在临时canvas上绘制裁剪区域
+        try {
+            ctx.drawImage(
+                originalImgElement,
+                cropX, cropY, cropRealWidth, cropRealHeight,
+                0, 0, cropRealWidth, cropRealHeight
+            );
+            
+            // 获取裁剪后的图像数据
+            const croppedImageURL = tempCanvas.toDataURL('image/png');
+            
+            if (!croppedImageURL || croppedImageURL === 'data:,') {
+                throw new Error('无法生成裁剪后的图像数据');
+            }
+            
+            // 创建新的Fabric图像对象
+            fabric.Image.fromURL(croppedImageURL, function(img) {
+                if (!img) {
+                    console.error('无法创建裁剪后的图像对象');
+                    alert('裁剪失败：无法创建裁剪后的图像');
+                    return;
+                }
+                
+                // 设置新图像位置与原图像相同
+                img.set({
+                    left: cropSourceObject.left,
+                    top: cropSourceObject.top,
+                    scaleX: cropSourceObject.scaleX,
+                    scaleY: cropSourceObject.scaleY,
+                    angle: cropSourceObject.angle,
+                    originX: cropSourceObject.originX,
+                    originY: cropSourceObject.originY,
+                    id: generateLayerId(),
+                    selectable: true,
+                    hasControls: true
+                });
+                
+                // 添加到画布并选中
+                canvas.add(img);
+                canvas.setActiveObject(img);
+                
+                // 移除原始图像
+                canvas.remove(cropSourceObject);
+                
+                // 更新图层面板
+                updateLayerPanel();
+                
+                console.log('裁剪完成，新图像已添加');
             });
             
-            canvas.add(newImg);
-            canvas.setActiveObject(newImg);
-            
-            // 移除原图
-            canvas.remove(activeObject);
-            
-            canvas.renderAll();
-            updateLayerPanel();
-            
-            // 清理
+            // 结束裁剪模式
             endCroppingMode();
-        });
+        } catch (drawError) {
+            console.error('绘制裁剪图像时出错:', drawError);
+            alert('裁剪过程出错: ' + drawError.message);
+            endCroppingMode();
+        }
     } catch (error) {
-        console.error('裁剪失败:', error);
-        alert('裁剪失败: ' + error.message);
+        console.error('应用裁剪时出错:', error);
+        alert('裁剪过程中发生错误: ' + error.message);
         endCroppingMode();
     }
 }
 
 // 取消裁剪
 function cancelCrop() {
+    console.log('取消裁剪');
     endCroppingMode();
 }
 
 // 结束裁剪模式
 function endCroppingMode() {
-    isCroppingMode = false;
-    cropRect = null;
-    
+    // 隐藏裁剪覆盖层
     const overlay = document.getElementById('croppingOverlay');
     if (overlay) {
         overlay.style.display = 'none';
     }
     
-    const cropCanvas = document.getElementById('croppingCanvas');
-    if (cropCanvas && cropCanvas._fabric) {
-        cropCanvas._fabric.dispose();
-        delete cropCanvas._fabric;
+    // 清理裁剪相关对象
+    if (cropFabric) {
+        cropFabric.dispose();
+        cropFabric = null;
     }
+    
+    cropRect = null;
+    cropSourceObject = null;
+    cropSourceImage = null;
+    
+    console.log('已退出裁剪模式');
 }
 
 // 开始裁剪模式
 function startCropping() {
-    const activeObject = canvas.getActiveObject();
-    if (!activeObject || !(activeObject instanceof fabric.Image)) {
-        alert('请先选择一个图片');
-        return;
+    try {
+        console.log('开始裁剪模式...');
+        
+        // 获取当前选中的图像
+        const activeObject = canvas.getActiveObject();
+        if (!activeObject) {
+            alert('请先选择一张图片进行裁剪');
+            return;
+        }
+        
+        if (activeObject.type !== 'image') {
+            alert('只能裁剪图片对象');
+            return;
+        }
+        
+        // 保存原始图片对象以供裁剪使用
+        cropSourceObject = activeObject;
+        
+        // 获取原图的元素，用于获取原始尺寸
+        const imgElement = activeObject.getElement();
+        if (!imgElement) {
+            alert('无法获取图像数据');
+            return;
+        }
+        
+        const originalWidth = imgElement.naturalWidth || activeObject.width;
+        const originalHeight = imgElement.naturalHeight || activeObject.height;
+        
+        if (originalWidth <= 0 || originalHeight <= 0) {
+            alert('图像尺寸无效');
+            return;
+        }
+        
+        console.log('原始图片尺寸:', originalWidth, 'x', originalHeight);
+        
+        // 检查裁剪覆盖层是否存在，不存在则创建
+        let overlay = document.getElementById('croppingOverlay');
+        if (!overlay) {
+            console.log('创建裁剪覆盖层元素');
+            overlay = document.createElement('div');
+            overlay.id = 'croppingOverlay';
+            overlay.className = 'cropping-overlay';
+            
+            // 创建裁剪canvas容器 - 添加一个包装元素
+            const croppingCanvasContainer = document.createElement('div'); 
+            croppingCanvasContainer.id = 'croppingCanvasContainer';
+            croppingCanvasContainer.style.position = 'relative';
+            croppingCanvasContainer.style.backgroundColor = 'white';
+            croppingCanvasContainer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+            
+            // 创建裁剪canvas
+            const croppingCanvasEl = document.createElement('canvas');
+            croppingCanvasEl.id = 'croppingCanvas';
+            croppingCanvasContainer.appendChild(croppingCanvasEl);
+            
+            // 创建裁剪控制区域
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'cropping-controls';
+            
+            // 创建预览区域
+            const previewDiv = document.createElement('div');
+            previewDiv.className = 'cropping-preview';
+            previewDiv.innerHTML = '<h4>裁剪预览</h4>';
+            
+            // 创建按钮
+            const applyBtn = document.createElement('button');
+            applyBtn.id = 'applyCropBtn';
+            applyBtn.textContent = '确认裁剪';
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.id = 'cancelCropBtn';
+            cancelBtn.textContent = '取消';
+            
+            // 组装DOM结构
+            controlsDiv.appendChild(previewDiv);
+            controlsDiv.appendChild(applyBtn);
+            controlsDiv.appendChild(cancelBtn);
+            
+            overlay.appendChild(croppingCanvasContainer);
+            overlay.appendChild(controlsDiv);
+            
+            // 添加到body
+            document.body.appendChild(overlay);
+        }
+        
+        // 显示裁剪覆盖层
+        overlay.style.display = 'flex';
+        
+        // 获取裁剪canvas
+        const croppingCanvasEl = document.getElementById('croppingCanvas');
+        if (!croppingCanvasEl) {
+            console.error('找不到裁剪canvas元素');
+            alert('无法初始化裁剪界面');
+            return;
+        }
+        
+        // 计算显示尺寸（确保适应屏幕大小并保持原始宽高比）
+        const maxWidth = window.innerWidth * 0.6;  // 调小一点，给预览区域留空间
+        const maxHeight = window.innerHeight * 0.6;
+        
+        // 保持原始图像的宽高比
+        const aspectRatio = originalWidth / originalHeight;
+        let displayWidth, displayHeight;
+        
+        if (originalWidth > maxWidth || originalHeight > maxHeight) {
+            const scaleWidth = maxWidth / originalWidth;
+            const scaleHeight = maxHeight / originalHeight;
+            const scale = Math.min(scaleWidth, scaleHeight);
+            
+            displayWidth = Math.round(originalWidth * scale);
+            displayHeight = Math.round(originalHeight * scale);
+        } else {
+            displayWidth = originalWidth;
+            displayHeight = originalHeight;
+        }
+        
+        // 调整裁剪画布容器的尺寸
+        const croppingCanvasContainer = document.getElementById('croppingCanvasContainer');
+        if (croppingCanvasContainer) {
+            croppingCanvasContainer.style.width = `${displayWidth}px`;
+            croppingCanvasContainer.style.height = `${displayHeight}px`;
+        }
+        
+        // 设置裁剪canvas大小
+        croppingCanvasEl.width = displayWidth;
+        croppingCanvasEl.height = displayHeight;
+        
+        // 创建裁剪fabric canvas实例
+        if (cropFabric) {
+            cropFabric.dispose();
+        }
+        
+        cropFabric = new fabric.Canvas('croppingCanvas');
+        cropFabric.setWidth(displayWidth);
+        cropFabric.setHeight(displayHeight);
+        
+        // 获取图像源URL
+        const imgSrc = activeObject.getSrc();
+        if (!imgSrc) {
+            console.error('无法获取图像URL');
+            alert('无法获取图像数据');
+            endCroppingMode();
+            return;
+        }
+        
+        // 加载图像到裁剪canvas
+        fabric.Image.fromURL(imgSrc, function(img) {
+            if (!img) {
+                console.error('无法创建图像对象');
+                alert('无法加载图像进行裁剪');
+                endCroppingMode();
+                return;
+            }
+            
+            // 计算图像缩放以填充canvas，同时保持宽高比
+            const imgRatio = img.width / img.height;
+            
+            // 设置图像大小以适应画布
+            if (imgRatio > aspectRatio) {
+                // 图像更宽，高度适应画布
+                img.scaleToHeight(displayHeight);
+                img.set({
+                    left: (displayWidth - (img.width * img.scaleX)) / 2,
+                    top: 0
+                });
+            } else {
+                // 图像更高，宽度适应画布
+                img.scaleToWidth(displayWidth);
+                img.set({
+                    left: 0,
+                    top: (displayHeight - (img.height * img.scaleY)) / 2
+                });
+            }
+            
+            // 添加到裁剪canvas并且禁止操作
+            cropFabric.add(img);
+            img.selectable = false;
+            img.evented = false;
+            
+            // 保存图像引用
+            cropSourceImage = img;
+            
+            // 计算裁剪框尺寸（默认为图像显示尺寸的80%，但保持宽高比）
+            const imgDisplayWidth = img.width * img.scaleX;
+            const imgDisplayHeight = img.height * img.scaleY;
+            
+            // 创建裁剪矩形，确保裁剪框在图像内部
+            const cropBoxWidth = imgDisplayWidth * 0.8;
+            const cropBoxHeight = imgDisplayHeight * 0.8;
+            
+            cropRect = new fabric.Rect({
+                left: img.left + (imgDisplayWidth - cropBoxWidth) / 2,
+                top: img.top + (imgDisplayHeight - cropBoxHeight) / 2,
+                width: cropBoxWidth,
+                height: cropBoxHeight,
+                fill: 'rgba(0,0,0,0.1)',
+                stroke: 'rgba(25, 118, 210, 0.8)',
+                strokeWidth: 2,
+                strokeDashArray: [5, 5],
+                transparentCorners: false,
+                cornerColor: '#1976d2',
+                cornerSize: 10,
+                lockRotation: true, // 禁止旋转
+                hasRotatingPoint: false,
+                centeredScaling: false,
+            });
+            
+            // 添加限制，确保裁剪框不会超出图像范围
+            cropRect.setControlsVisibility({
+                mt: true, 
+                mb: true, 
+                ml: true, 
+                mr: true, 
+                tl: true, 
+                tr: true, 
+                bl: true, 
+                br: true
+            });
+            
+            // 限制裁剪框移动范围
+            cropFabric.on('object:moving', function(e) {
+                if (e.target !== cropRect) return;
+                
+                const obj = e.target;
+                const imgLeft = cropSourceImage.left;
+                const imgTop = cropSourceImage.top;
+                const imgWidth = cropSourceImage.width * cropSourceImage.scaleX;
+                const imgHeight = cropSourceImage.height * cropSourceImage.scaleY;
+                
+                // 计算边界
+                const minLeft = imgLeft;
+                const minTop = imgTop;
+                const maxLeft = imgLeft + imgWidth - obj.width * obj.scaleX;
+                const maxTop = imgTop + imgHeight - obj.height * obj.scaleY;
+                
+                // 限制移动
+                if (obj.left < minLeft) obj.set('left', minLeft);
+                if (obj.top < minTop) obj.set('top', minTop);
+                if (obj.left > maxLeft) obj.set('left', maxLeft);
+                if (obj.top > maxTop) obj.set('top', maxTop);
+            });
+            
+            cropFabric.add(cropRect);
+            cropFabric.setActiveObject(cropRect);
+            
+            // 设置裁剪预览更新
+            cropFabric.on('object:modified', updateCropPreview);
+            cropFabric.on('object:moving', updateCropPreview);
+            cropFabric.on('object:scaling', updateCropPreview);
+            
+            // 初始化显示裁剪预览
+            updateCropPreview();
+            
+            console.log('裁剪模式初始化完成，显示尺寸:', displayWidth, 'x', displayHeight);
+        });
+        
+        // 确保裁剪确认按钮只绑定一次事件
+        const applyCropBtn = document.getElementById('applyCropBtn');
+        const cancelCropBtn = document.getElementById('cancelCropBtn');
+        
+        if (applyCropBtn) {
+            applyCropBtn.onclick = applyCrop;
+        }
+        
+        if (cancelCropBtn) {
+            cancelCropBtn.onclick = cancelCrop;
+        }
+    } catch (error) {
+        console.error('启动裁剪模式出错:', error);
+        alert('启动裁剪模式时发生错误: ' + error.message);
+        endCroppingMode();
     }
-    
-    isCroppingMode = true;
-    
-    // 显示裁剪遮罩
-    const overlay = document.getElementById('croppingOverlay');
-    const cropCanvas = document.getElementById('croppingCanvas');
-    
-    if (!overlay || !cropCanvas) return;
-    
-    overlay.style.display = 'flex';
-    
-    // 设置裁剪画布尺寸
-    cropCanvas.width = activeObject.width * activeObject.scaleX;
-    cropCanvas.height = activeObject.height * activeObject.scaleY;
-    
-    // 初始化裁剪画布
-    const cropFabric = new fabric.Canvas(cropCanvas);
-    cropCanvas._fabric = cropFabric; // 存储引用以便后续使用
-    
-    // 添加图像
-    fabric.Image.fromURL(activeObject._element.src, (img) => {
-        img.set({
-            left: cropCanvas.width / 2,
-            top: cropCanvas.height / 2,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false
-        });
-        cropFabric.add(img);
+}
+
+// 更新裁剪预览
+function updateCropPreview() {
+    try {
+        console.log('更新裁剪预览...');
         
-        // 创建裁剪矩形
-        cropRect = new fabric.Rect({
-            left: cropCanvas.width / 2,
-            top: cropCanvas.height / 2,
-            width: cropCanvas.width * 0.8,
-            height: cropCanvas.height * 0.8,
-            fill: 'rgba(0,0,0,0.3)',
-            stroke: '#4CAF50',
-            strokeWidth: 2,
-            strokeDashArray: [5, 5],
-            originX: 'center',
-            originY: 'center'
-        });
+        // 检查裁剪模式是否有效
+        if (!cropFabric || !cropRect || !cropSourceImage) {
+            console.error('裁剪模式无效或缺少必要的裁剪对象:', {
+                cropFabric: !!cropFabric,
+                cropRect: !!cropRect,
+                cropSourceImage: !!cropSourceImage
+            });
+            return;
+        }
         
-        cropFabric.add(cropRect);
-        cropFabric.setActiveObject(cropRect);
-        cropFabric.renderAll();
-    });
+        // 获取裁剪矩形的位置和尺寸
+        const cropLeft = cropRect.left;
+        const cropTop = cropRect.top;
+        const cropWidth = cropRect.width * cropRect.scaleX;
+        const cropHeight = cropRect.height * cropRect.scaleY;
+        
+        // 确保裁剪区域在有效范围内
+        if (cropWidth <= 0 || cropHeight <= 0) {
+            console.warn('裁剪区域尺寸无效:', cropWidth, cropHeight);
+            return;
+        }
+        
+        // 找到预览容器
+        const previewContainer = document.querySelector('.cropping-preview');
+        if (!previewContainer) return;
+        
+        // 查找或创建预览图像元素
+        let previewImg = previewContainer.querySelector('img');
+        if (!previewImg) {
+            previewImg = document.createElement('img');
+            previewImg.style.maxWidth = '100%';
+            previewImg.style.maxHeight = '100%';
+            previewImg.style.border = '1px solid #ccc';
+            previewImg.style.marginTop = '10px';
+            previewContainer.appendChild(previewImg);
+        }
+        
+        // 从裁剪canvas中提取裁剪区域
+        try {
+            // 创建临时canvas用于预览
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropWidth;
+            tempCanvas.height = cropHeight;
+            const ctx = tempCanvas.getContext('2d');
+            
+            // 获取裁剪区域的像素数据
+            const cropImageData = cropFabric.toCanvasElement({
+                left: cropLeft,
+                top: cropTop,
+                width: cropWidth,
+                height: cropHeight
+            });
+            
+            // 绘制到临时canvas
+            ctx.drawImage(cropImageData, 0, 0);
+            
+            // 设置预览图像源
+            previewImg.src = tempCanvas.toDataURL('image/png');
+            
+            console.log('更新裁剪预览完成');
+        } catch (error) {
+            console.error('生成裁剪预览时出错:', error);
+            
+            // 使用备用方法尝试生成预览
+            try {
+                const cropData = cropFabric.toDataURL({
+                    left: cropLeft,
+                    top: cropTop,
+                    width: cropWidth,
+                    height: cropHeight,
+                    format: 'png'
+                });
+                
+                if (cropData && cropData !== 'data:,') {
+                    previewImg.src = cropData;
+                    console.log('使用备用方法更新裁剪预览');
+                }
+            } catch (backupError) {
+                console.error('备用预览方法也失败:', backupError);
+            }
+        }
+    } catch (error) {
+        console.error('更新裁剪预览时出错:', error);
+    }
 }
 
 // 更新图层面板
@@ -1321,6 +1702,52 @@ function setupCanvasEvents() {
             duplicateSelected();
             e.preventDefault();
         }
+    });
+    
+    // 添加页面可见性变化监听
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // 添加窗口焦点变化监听
+    window.addEventListener('focus', () => {
+        if (!isWindowVisible) {
+            isWindowVisible = true;
+            console.log('窗口获得焦点，恢复操作');
+            setTimeout(() => {
+                if (canvas) {
+                    canvas.renderAll();
+                    if (isTransparentBg) {
+                        updateCheckerboardPosition(true);
+                    }
+                }
+            }, 300);
+        }
+    });
+    
+    window.addEventListener('blur', () => {
+        isWindowVisible = false;
+        console.log('窗口失去焦点，暂停某些操作');
+    });
+    
+    // 添加窗口大小变化处理，使其更稳定
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (canvas && isWindowVisible) {
+                // 触发画布内容更新
+                canvas.renderAll();
+                
+                // 如果是透明背景模式，更新棋盘格
+                if (isTransparentBg) {
+                    updateCheckerboardPosition(true);
+                }
+                
+                // 更新预览
+                if (typeof updatePreview === 'function') {
+                    updatePreview();
+                }
+            }
+        }, 300);
     });
 }
 
@@ -2042,169 +2469,83 @@ async function saveAsTemplate() {
 
 // 初始化画布
 function initCanvas() {
-    console.log('初始化Canvas...');
-    
-    // 计算画布大小以适应屏幕
-    const containerWidth = window.innerWidth;
-    const containerHeight = window.innerHeight;
-    
-    // 左右面板的宽度
-    const leftPanelWidth = document.querySelector('.left-panel')?.offsetWidth || 250;
-    const rightPanelWidth = document.querySelector('.right-panel')?.offsetWidth || 250;
-    
-    // 计算画布最大可用空间
-    const maxCanvasWidth = containerWidth - leftPanelWidth - rightPanelWidth - 60; // 额外留出一些边距
-    const maxCanvasHeight = containerHeight - 100; // 留出顶部和底部边距
-    
-    // 计算画布初始大小，默认使用600x600，但确保不超出屏幕
-    let canvasWidth = Math.min(600, maxCanvasWidth);
-    let canvasHeight = Math.min(600, maxCanvasHeight);
-    
-    // 创建新的Fabric Canvas
-    canvas = new fabric.Canvas('canvas', {
-        width: canvasWidth,
-        height: canvasHeight,
-        backgroundColor: '#ffffff',
-        preserveObjectStacking: true,
-        selection: true,
-        centeredScaling: true,
-        stopContextMenu: true,
-        allowTouchScrolling: false  // 禁用触摸滚动以避免冲突
-    });
-    
-    // 为Canvas容器添加canvas元素
+    // 获取画布容器
     const canvasContainer = document.getElementById('canvas-container');
-    if (canvasContainer) {
-        canvasContainer.appendChild(canvas.wrapperEl);
-        
-        // 确保画布容器居中
-        canvasContainer.style.display = 'flex';
-        canvasContainer.style.justifyContent = 'center';
-        canvasContainer.style.alignItems = 'center';
-        canvasContainer.style.overflow = 'hidden';
-        
-        // 确保canvas-container-wrapper居中
-        const wrapper = document.querySelector('.canvas-container-wrapper');
-        if (wrapper) {
-            wrapper.style.display = 'flex';
-            wrapper.style.justifyContent = 'center';
-            wrapper.style.alignItems = 'center';
-            wrapper.style.height = `${maxCanvasHeight}px`;
-        }
+    if (!canvasContainer) {
+        console.error('找不到画布容器元素');
+        return;
     }
     
-    // 设置对象选择样式
+    // 计算画布初始尺寸
+    const defaultWidth = 600;
+    const defaultHeight = 600;
+    
+    // 初始化fabric.js画布，使用已存在的canvas元素
+    const canvasEl = document.getElementById('canvas');
+    if (!canvasEl) {
+        // 如果不存在，创建一个canvas元素
+        const newCanvas = document.createElement('canvas');
+        newCanvas.id = 'canvas';
+        canvasContainer.appendChild(newCanvas);
+        console.log('创建了新的canvas元素');
+        
+        // 初始化fabric.js画布
+        canvas = new fabric.Canvas(newCanvas, {
+            width: defaultWidth,
+            height: defaultHeight,
+            preserveObjectStacking: true,
+            selection: true
+        });
+    } else {
+        console.log('使用已存在的canvas元素');
+        
+        // 初始化fabric.js画布
+        canvas = new fabric.Canvas(canvasEl, {
+            width: defaultWidth,
+            height: defaultHeight,
+            preserveObjectStacking: true,
+            selection: true
+        });
+    }
+    
+    // 设置画布样式
+    canvas.selection = true;
+    
+    // 初始化画布背景
+    canvas.backgroundColor = 'white';
+    
+    // 设置缩放/旋转控件样式
     fabric.Object.prototype.transparentCorners = false;
-    fabric.Object.prototype.cornerColor = '#1976d2';
+    fabric.Object.prototype.cornerColor = '#4CAF50';
     fabric.Object.prototype.cornerStyle = 'circle';
-    fabric.Object.prototype.borderColor = '#1976d2';
     fabric.Object.prototype.cornerSize = 10;
     fabric.Object.prototype.padding = 5;
+    fabric.Object.prototype.borderColor = '#4CAF50';
     
-    // 启用画布平移功能
-    canvas.on('mouse:down', function(opt) {
-        // 如果按住了空格键或中键，启用画布平移模式
-        if (opt.e.altKey || opt.e.button === 1) {
-            this.isDragging = true;
-            this.selection = false;
-            this.lastPosX = opt.e.clientX;
-            this.lastPosY = opt.e.clientY;
-        }
-    });
+    // 设置画布预设
+    canvas.stopContextMenu = true;  // 禁用右键菜单
     
-    canvas.on('mouse:move', function(opt) {
-        if (this.isDragging) {
-            const e = opt.e;
-            const vpt = this.viewportTransform;
-            vpt[4] += e.clientX - this.lastPosX;
-            vpt[5] += e.clientY - this.lastPosY;
-            this.requestRenderAll();
-            this.lastPosX = e.clientX;
-            this.lastPosY = e.clientY;
-            
-            // 如果是透明背景模式，延迟更新棋盘格位置（避免频繁更新导致性能问题）
-            if (isTransparentBg) {
-                clearTimeout(this.checkerboardUpdateTimer);
-                this.checkerboardUpdateTimer = setTimeout(updateCheckerboardPosition, 100);
-            }
-        }
-    });
-    
-    canvas.on('mouse:up', function() {
-        this.isDragging = false;
-        this.selection = true;
-    });
-    
-    // 允许鼠标滚轮缩放
-    canvas.on('mouse:wheel', function(opt) {
-        const e = opt.e;
-        const zoom = this.getZoom();
-        const point = {
-            x: e.offsetX,
-            y: e.offsetY
-        };
-        
-        // 设置缩放系数
-        let factor = 0.05;
-        if (e.deltaY < 0) {
-            // 放大
-            factor = factor * -1;
-        }
-        
-        // 限制缩放范围
-        const newZoom = Math.max(0.5, Math.min(zoom + factor, 5));
-        
-        // 应用缩放
-        this.zoomToPoint(point, newZoom);
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
-    });
-    
-    // 创建网格
-    addCanvasGrid();
-    
-    // 初始化标尺
-    initRuler();
+    // 设置选择样式
+    canvas.selectionColor = 'rgba(76, 175, 80, 0.1)';
+    canvas.selectionBorderColor = '#4CAF50';
+    canvas.selectionLineWidth = 1;
     
     // 设置画布事件
     setupCanvasEvents();
     
-    // 设置预览功能
-    setupLivePreview();
+    // 添加自定义控件
+    setupLayerControls();
     
-    // 设置图层更新事件
-    canvas.on('object:added', updateLayerPanel);
-    canvas.on('object:removed', updateLayerPanel);
-    canvas.on('selection:created', updateLayerPanel);
-    canvas.on('selection:updated', updateLayerPanel);
-    canvas.on('selection:cleared', updateLayerPanel);
-    canvas.on('object:modified', updateLayerPanel);
+    // 更新属性面板
+    updatePropertiesPanel();
     
-    // 更新预览的事件监听
-    canvas.on({
-        'object:modified': updatePreview,
-        'object:added': updatePreview,
-        'object:removed': updatePreview,
-        'object:moving': debounceEvent(updatePreview, 100),
-        'object:scaling': debounceEvent(updatePreview, 100),
-        'object:rotating': debounceEvent(updatePreview, 100),
-        'object:skewing': debounceEvent(updatePreview, 100),
-        // 画布变换后更新透明背景
-        'after:render': function() {
-            if (isTransparentBg) {
-                clearTimeout(this.checkerboardUpdateTimer);
-                this.checkerboardUpdateTimer = setTimeout(updateCheckerboardPosition, 100);
-            }
-        }
-    });
-    
-    // 首次更新图层面板
+    // 初始化图层面板
     updateLayerPanel();
     
-    // 添加窗口大小变化事件监听，调整画布大小
-    window.addEventListener('resize', resizeCanvas);
+    // 更新预览
+    updatePreview();
     
-    console.log('Canvas初始化完成，尺寸:', canvas.width, 'x', canvas.height);
+    console.log('画布初始化完成，尺寸:', canvas.width, 'x', canvas.height);
     
     return canvas;
 }
@@ -2945,6 +3286,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置自定义图层控件
     setupLayerControls();
+    
+    // 禁用鼠标滚轮缩放，防止画布被意外缩放
+    disableMouseWheelZoom();
+    
+    // 更新透明背景状态
+    setTimeout(() => {
+        if (isTransparentBg) {
+            updateCanvasTransparency();
+        }
+    }, 500);
 });
 
 // 设置实时预览功能
@@ -3517,36 +3868,68 @@ function resizeCanvas() {
 }
 
 // 更新透明背景棋盘格位置和大小
-function updateCheckerboardPosition() {
+function updateCheckerboardPosition(forceUpdate = false) {
     if (!isTransparentBg) return;
     
     const gridPattern = document.getElementById('checker-pattern');
-    const canvasContainer = document.getElementById('canvas-container');
-    const fabricCanvasContainer = document.querySelector('.canvas-container');
+    if (!gridPattern) {
+        console.error('找不到棋盘格背景元素');
+        return;
+    }
     
-    if (!gridPattern || !canvasContainer || !fabricCanvasContainer) return;
+    // 获取canvas元素
+    const lowerCanvas = document.querySelector('.lower-canvas');
+    const upperCanvas = document.querySelector('.upper-canvas');
+    if (!lowerCanvas || !upperCanvas) {
+        console.error('找不到Fabric.js的上层或下层画布');
+        return;
+    }
     
-    // 获取计算样式以确保得到实际像素尺寸
-    const canvasStyle = window.getComputedStyle(fabricCanvasContainer);
-    const canvasWidth = parseInt(canvasStyle.width);
-    const canvasHeight = parseInt(canvasStyle.height);
-    
-    // 设置背景大小与画布一致
-    gridPattern.style.width = canvasWidth + 'px';
-    gridPattern.style.height = canvasHeight + 'px';
-    
-    // 获取canvas容器在父元素中的位置
-    const rect = fabricCanvasContainer.getBoundingClientRect();
-    const containerRect = canvasContainer.getBoundingClientRect();
-    
-    // 计算相对位置
-    const leftOffset = rect.left - containerRect.left;
-    const topOffset = rect.top - containerRect.top;
-    
-    gridPattern.style.left = leftOffset + 'px';
-    gridPattern.style.top = topOffset + 'px';
-    
-    console.log('透明背景棋盘格位置已更新');
+    try {
+        // 获取画布的实际尺寸和位置
+        const canvasWidth = lowerCanvas.width;
+        const canvasHeight = lowerCanvas.height;
+        const canvasLeft = lowerCanvas.offsetLeft;
+        const canvasTop = lowerCanvas.offsetTop;
+        
+        // 设置棋盘格的尺寸和位置，确保与画布完全匹配
+        gridPattern.style.width = `${canvasWidth}px`;
+        gridPattern.style.height = `${canvasHeight}px`;
+        gridPattern.style.left = `${canvasLeft}px`;
+        gridPattern.style.top = `${canvasTop}px`;
+        
+        // 获取当前缩放级别
+        const zoom = canvas.getZoom();
+        
+        // 调整棋盘格图案的大小以适应缩放
+        const patternSize = Math.max(5, Math.floor(20 / zoom));
+        const halfSize = Math.floor(patternSize / 2);
+        
+        // 考虑平移位置
+        const vpt = canvas.viewportTransform;
+        const translateX = vpt[4] % patternSize;
+        const translateY = vpt[5] % patternSize;
+        
+        // 更新棋盘格的背景图案大小和位置
+        gridPattern.style.backgroundSize = `${patternSize}px ${patternSize}px`;
+        gridPattern.style.backgroundPosition = 
+            `${translateX}px ${translateY}px, 
+             ${translateX}px ${translateY + halfSize}px, 
+             ${translateX + halfSize}px ${translateY - halfSize}px, 
+             ${translateX - halfSize}px ${translateY}px`;
+        
+        // 确保棋盘格始终位于最底层，但在背景之上
+        gridPattern.style.zIndex = '-1';
+        
+        if (forceUpdate) {
+            console.log('强制更新透明背景棋盘格 - 尺寸:', canvasWidth, 'x', canvasHeight, 
+                        '位置:', canvasLeft, ',', canvasTop, '缩放:', zoom);
+        } else {
+            console.log('透明背景棋盘格位置已更新');
+        }
+    } catch (error) {
+        console.error('更新棋盘格位置时出错:', error);
+    }
 }
 
 // 调整画布大小
@@ -3653,4 +4036,334 @@ function resizeCanvas(width, height) {
     } catch (error) {
         console.error('调整画布大小时出错:', error);
     }
+}
+
+// 初始化鼠标滚轮缩放和平移功能
+function setupMouseWheelZoom() {
+    // 移除之前可能存在的事件监听器
+    canvas.off('mouse:wheel');
+    canvas.off('mouse:down');
+    canvas.off('mouse:move');
+    canvas.off('mouse:up');
+    
+    // 跟踪鼠标状态
+    let isDragging = false;
+    let lastPosX = 0;
+    let lastPosY = 0;
+    let isSpacePressed = false;
+    
+    // 跟踪键盘空格键状态
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.keyCode === 32) {
+            isSpacePressed = true;
+            document.body.style.cursor = 'grab';
+        }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+        if (e.code === 'Space' || e.keyCode === 32) {
+            isSpacePressed = false;
+            document.body.style.cursor = 'default';
+        }
+    });
+    
+    // 滚轮缩放 - 默认行为是滚轮直接缩放整个画布，不需要按住Alt键
+    canvas.on('mouse:wheel', function(opt) {
+        try {
+            const e = opt.e;
+            if (!e) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // 获取当前缩放和鼠标位置
+            const delta = e.deltaY;
+            const zoom = canvas.getZoom();
+            
+            // 安全检查 - 确保canvas有正确的viewportTransform
+            if (!canvas.viewportTransform) {
+                console.error('滚轮缩放错误：canvas.viewportTransform未定义');
+                return;
+            }
+            
+            // 获取鼠标在canvas中的坐标
+            const pointer = canvas.getPointer(e);
+            const point = {
+                x: pointer.x,
+                y: pointer.y
+            };
+            
+            // 计算新的缩放值
+            let newZoom;
+            const scaleFactor = 0.05; // 缩放步长
+            
+            // 根据滚轮方向计算新的缩放值
+            if (delta < 0) {
+                // 放大
+                newZoom = Math.min(zoom * (1 + scaleFactor), 10.0);
+            } else {
+                // 缩小
+                newZoom = Math.max(zoom * (1 - scaleFactor), 0.1);
+            }
+            
+            if (newZoom !== zoom) {
+                try {
+                    // 使用zoomToPoint而不是setZoom，确保以鼠标位置为中心缩放
+                    canvas.zoomToPoint(point, newZoom);
+                    
+                    // 更新缩放显示
+                    updateZoomDisplay(newZoom);
+                    
+                    // 检查透明背景，更新棋盘格位置
+                    if (isTransparentBg) {
+                        requestAnimationFrame(updateCheckerboardPosition);
+                    }
+                    
+                    // 更新标尺（如果启用）
+                    if (isRulerVisible) {
+                        requestAnimationFrame(drawRulerMarkings);
+                    }
+                    
+                    // 触发自定义事件，通知其他组件缩放已更改
+                    canvas.fire('zoom:changed', { zoom: newZoom });
+                } catch (zoomError) {
+                    console.error('应用缩放时出错:', zoomError);
+                }
+            }
+        } catch (error) {
+            console.error('鼠标滚轮事件处理出错:', error);
+        }
+    });
+    
+    // 鼠标按下，开始拖动
+    canvas.on('mouse:down', function(opt) {
+        const e = opt.e;
+        
+        // 如果选中了对象或者没有按空格键，不进行画布拖动
+        if (canvas.getActiveObject() && !isSpacePressed) {
+            return;
+        }
+        
+        // 设置拖动状态
+        if (isSpacePressed || !canvas.getActiveObject()) {
+            isDragging = true;
+            canvas.selection = false;
+            lastPosX = e.clientX;
+            lastPosY = e.clientY;
+            document.body.style.cursor = 'grabbing';
+        }
+    });
+    
+    // 鼠标移动，更新画布位置
+    canvas.on('mouse:move', function(opt) {
+        if (isDragging) {
+            const e = opt.e;
+            const vpt = canvas.viewportTransform;
+            
+            // 计算位移
+            const deltaX = e.clientX - lastPosX;
+            const deltaY = e.clientY - lastPosY;
+            
+            // 更新画布视口变换矩阵
+            vpt[4] += deltaX;
+            vpt[5] += deltaY;
+            
+            // 应用变换
+            canvas.setViewportTransform(vpt);
+            
+            // 保存当前位置
+            lastPosX = e.clientX;
+            lastPosY = e.clientY;
+            
+            // 如果有透明背景，更新棋盘格位置
+            if (isTransparentBg) {
+                updateCheckerboardPosition();
+            }
+            
+            // 更新标尺位置（如果启用）
+            if (isRulerVisible) {
+                drawRulerMarkings();
+            }
+            
+            // 防止选择对象
+            if (opt.target) {
+                opt.target.selectable = false;
+            }
+        }
+    });
+    
+    // 鼠标释放，结束拖动
+    canvas.on('mouse:up', function() {
+        isDragging = false;
+        canvas.selection = true;
+        document.body.style.cursor = isSpacePressed ? 'grab' : 'default';
+        
+        // 恢复对象的可选择性
+        canvas.getObjects().forEach(obj => {
+            if (!obj.locked) {
+                obj.selectable = true;
+            }
+        });
+    });
+    
+    // 设置缩放按钮事件
+    setupZoomButtons();
+}
+
+// 设置缩放按钮
+function setupZoomButtons() {
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    const zoomResetBtn = document.getElementById('zoomReset');
+    
+    if (zoomInBtn) {
+        zoomInBtn.addEventListener('click', function() {
+            const zoom = canvas.getZoom();
+            const newZoom = Math.min(zoom * 1.1, 10.0);
+            
+            // 以画布中心为缩放点
+            const center = {
+                x: canvas.width / 2,
+                y: canvas.height / 2
+            };
+            
+            canvas.zoomToPoint(center, newZoom);
+            updateZoomDisplay(newZoom);
+            
+            // 更新透明背景和标尺
+            if (isTransparentBg) updateCheckerboardPosition();
+            if (isRulerVisible) drawRulerMarkings();
+            
+            canvas.fire('zoom:changed', { zoom: newZoom });
+        });
+    }
+    
+    if (zoomOutBtn) {
+        zoomOutBtn.addEventListener('click', function() {
+            const zoom = canvas.getZoom();
+            const newZoom = Math.max(zoom * 0.9, 0.1);
+            
+            // 以画布中心为缩放点
+            const center = {
+                x: canvas.width / 2,
+                y: canvas.height / 2
+            };
+            
+            canvas.zoomToPoint(center, newZoom);
+            updateZoomDisplay(newZoom);
+            
+            // 更新透明背景和标尺
+            if (isTransparentBg) updateCheckerboardPosition();
+            if (isRulerVisible) drawRulerMarkings();
+            
+            canvas.fire('zoom:changed', { zoom: newZoom });
+        });
+    }
+    
+    if (zoomResetBtn) {
+        zoomResetBtn.addEventListener('click', function() {
+            // 重置缩放为1
+            canvas.setZoom(1);
+            
+            // 重置视口变换，将画布居中
+            const vpt = canvas.viewportTransform;
+            vpt[4] = 0;
+            vpt[5] = 0;
+            canvas.setViewportTransform(vpt);
+            
+            updateZoomDisplay(1);
+            
+            // 更新透明背景和标尺
+            if (isTransparentBg) updateCheckerboardPosition();
+            if (isRulerVisible) drawRulerMarkings();
+            
+            canvas.fire('zoom:changed', { zoom: 1 });
+        });
+    }
+}
+
+// 更新缩放显示
+function updateZoomDisplay(zoom) {
+    const zoomResetBtn = document.getElementById('zoomReset');
+    if (zoomResetBtn) {
+        zoomResetBtn.textContent = Math.round(zoom * 100) + '%';
+    }
+}
+
+// 处理页面可见性变化事件
+function handleVisibilityChange() {
+    if (document.hidden) {
+        // 页面被最小化或切换到后台
+        isWindowVisible = false;
+        console.log('页面不可见，暂停某些操作');
+    } else {
+        // 页面恢复可见
+        isWindowVisible = true;
+        console.log('页面重新可见，恢复操作');
+        
+        // 重新初始化关键组件
+        setTimeout(() => {
+            try {
+                // 如果画布存在，修复其状态
+                if (canvas) {
+                    // 强制刷新画布显示
+                    canvas.renderAll();
+                    
+                    // 如果是透明背景模式，重新设置
+                    if (isTransparentBg) {
+                        // 尝试修复透明背景
+                        updateCanvasTransparency();
+                    }
+                    
+                    // 更新预览
+                    if (typeof updatePreview === 'function') {
+                        updatePreview();
+                    }
+                    
+                    // 更新图层面板
+                    if (typeof updateLayerPanel === 'function') {
+                        updateLayerPanel();
+                    }
+                }
+            } catch (error) {
+                console.error('恢复页面可见性时出错:', error);
+            }
+        }, 300);
+    }
+}
+
+// 禁用鼠标滚轮缩放功能
+function disableMouseWheelZoom() {
+    // 移除之前可能存在的鼠标滚轮事件监听器
+    canvas.off('mouse:wheel');
+    
+    // 阻止鼠标滚轮在画布上触发缩放
+    canvas.on('mouse:wheel', function(opt) {
+        const e = opt.e;
+        // 阻止默认行为，但不执行缩放
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    // 重置画布缩放为1
+    canvas.setZoom(1);
+    
+    // 重置视口变换，将画布居中
+    const vpt = canvas.viewportTransform;
+    if (vpt) {
+        vpt[0] = 1;  // scaleX
+        vpt[3] = 1;  // scaleY
+        vpt[4] = 0;  // translateX
+        vpt[5] = 0;  // translateY
+        canvas.setViewportTransform(vpt);
+        canvas.renderAll();
+    }
+    
+    // 更新缩放显示
+    const zoomResetBtn = document.getElementById('zoomReset');
+    if (zoomResetBtn) {
+        zoomResetBtn.textContent = '100%';
+    }
+    
+    console.log('已禁用鼠标滚轮缩放功能');
 }

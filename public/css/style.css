@@ -218,16 +218,40 @@ body {
 
 /* 透明背景样式 */
 .canvas-checker-pattern {
-    pointer-events: none;
-    z-index: -1;
+    background-color: #ffffff;
     background-image: 
-        linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
-        linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
-        linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+        linear-gradient(45deg, #d0d0d0 25%, transparent 25%), 
+        linear-gradient(-45deg, #d0d0d0 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #d0d0d0 75%), 
+        linear-gradient(-45deg, transparent 75%, #d0d0d0 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-    background-color: #ffffff;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* 新增透明背景棋盘格样式 */
+.transparent-grid-pattern {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+    background-color: white !important;
+    background-image:
+        linear-gradient(45deg, #aaaaaa 25%, transparent 25%),
+        linear-gradient(-45deg, #aaaaaa 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #aaaaaa 75%),
+        linear-gradient(-45deg, transparent 75%, #aaaaaa 75%) !important;
+    background-size: 20px 20px !important;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px !important;
 }
 
 /* 右侧面板改进 */
@@ -1833,4 +1857,110 @@ input[type="color"] {
     align-items: center;
     font-size: 10px;
     pointer-events: none;
+}
+
+/* 确保画布容器正确显示透明背景 */
+#canvas-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    background-color: transparent;
+}
+
+.canvas-container {
+    position: relative;
+    z-index: 1;
+}
+
+/* 裁剪模式样式 */
+.cropping-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#croppingCanvasContainer {
+    margin-right: 20px;
+    background-color: white;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cropping-controls {
+    margin-left: 20px;
+    display: flex;
+    flex-direction: column;
+    background-color: #f0f0f0;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    width: 200px;
+}
+
+.cropping-preview {
+    width: 100%;
+    height: 150px;
+    border: 1px solid #ccc;
+    background-color: white;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.cropping-preview h4 {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #333;
+    width: 100%;
+    text-align: center;
+    padding: 5px 0;
+    background-color: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+}
+
+.cropping-preview img {
+    max-width: 90%;
+    max-height: calc(100% - 30px);
+    object-fit: contain;
+    margin-top: 5px;
+}
+
+.cropping-controls button {
+    padding: 10px 15px;
+    margin: 5px 0;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s;
+    font-size: 14px;
+}
+
+.cropping-controls button:hover {
+    background-color: #0b7dda;
+}
+
+#cancelCropBtn {
+    background-color: #f44336;
+}
+
+#cancelCropBtn:hover {
+    background-color: #d32f2f;
 } 
