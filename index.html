@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>透卡设计器</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+</head>
+<body>
+    <div class="editor-container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>背景模板</h3>
+                <div class="template-list" id="templateList"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>素材库</h3>
+                <div class="material-list" id="materialList"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>上传图片</h3>
+                <input type="file" id="imageUpload" accept="image/*">
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="toolbar">
+                <button id="saveBtn">保存设计</button>
+                <button id="previewBtn">预览</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="canvas"></canvas>
+            </div>
+        </div>
+    </div>
+    <script src="js/editor.js"></script>
+</body>
+</html> 

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>透卡设计器</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧模板和素材面板 -->
+        <div class="left-panel">
+            <div class="panel-header">
+                <h2>素材库</h2>
+            </div>
+            <div class="panel-content">
+                <div class="material-tabs">
+                    <button class="tab-btn active" data-target="stickers">贴纸</button>
+                    <button class="tab-btn" data-target="backgrounds">背景</button>
+                    <button class="tab-btn" data-target="shapes">形状</button>
+                </div>
+                
+                <div class="tab-content active" id="stickers">
+                    <!-- 贴纸会动态加载 -->
+                </div>
+                
+                <div class="tab-content" id="backgrounds">
+                    <!-- 背景会动态加载 -->
+                </div>
+                
+                <div class="tab-content" id="shapes">
+                    <div class="shapes-container">
+                        <button class="shape-btn" data-shape="rect">矩形</button>
+                        <button class="shape-btn" data-shape="circle">圆形</button>
+                        <button class="shape-btn" data-shape="triangle">三角形</button>
+                        <button class="shape-btn" data-shape="star">星形</button>
+                        <button class="shape-btn" data-shape="heart">心形</button>
+                        <button class="shape-btn" data-shape="polygon">多边形</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-header">
+                <h2>我的素材</h2>
+            </div>
+            <div class="panel-content">
+                <div class="dropzone" id="dropZone">
+                    <p>拖放图片到此处或点击上传</p>
+                    <input type="file" id="imageUpload" accept="image/*" style="display:none;">
+                </div>
+                <div class="material-library" id="uploadedList">
+                    <!-- 上传的图片会显示在这里 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间画布区域 -->
+        <div class="canvas-area">
+            <!-- 预设尺寸选择器 -->
+            <div class="preset-sizes-container">
+                <label>画布尺寸:</label>
+                <div class="preset-sizes">
+                    <div class="preset-size active" data-width="600" data-height="600">600×600</div>
+                    <div class="preset-size" data-width="800" data-height="800">800×800</div>
+                    <div class="preset-size" data-width="1000" data-height="1000">1000×1000</div>
+                    <div class="preset-size" data-width="1200" data-height="1200">1200×1200</div>
+                </div>
+                <div class="custom-size-inputs">
+                    <input type="number" id="customWidth" min="100" max="2000" placeholder="宽">
+                    <span>×</span>
+                    <input type="number" id="customHeight" min="100" max="2000" placeholder="高">
+                    <button class="apply-size-btn" id="applyCustomSize">应用</button>
+                </div>
+            </div>
+
+            <!-- 画布容器 -->
+            <div class="canvas-container-wrapper">
+                <!-- 标尺容器 -->
+                <div class="ruler-container">
+                    <div class="ruler ruler-h" id="rulerHorizontal"></div>
+                    <div class="ruler ruler-v" id="rulerVertical"></div>
+                    <div class="ruler-corner"></div>
+                </div>
+                
+                <div id="canvas-container"></div>
+            </div>
+            
+            <div class="toolbar" id="toolbar">
+                <!-- 编辑工具 -->
+                <div class="toolbar-group">
+                    <button data-action="add-text" title="添加文本">文本</button>
+                    <button data-action="transparent-bg" id="transparentBg" title="透明背景">透明背景</button>
+                </div>
+                <div class="toolbar-group">
+                    <button data-action="bring-to-front" title="置于顶层">置顶</button>
+                    <button data-action="send-to-back" title="置于底层">置底</button>
+                    <button data-action="show-ruler" id="toggleRuler" title="显示/隐藏标尺">标尺</button>
+                </div>
+                <div class="toolbar-group">
+                    <button data-action="group" title="组合">组合</button>
+                    <button data-action="ungroup" title="取消组合">取消组合</button>
+                    <button data-action="duplicate" title="复制">复制</button>
+                    <button data-action="delete" title="删除">删除</button>
+                </div>
+                <div class="toolbar-group">
+                    <button data-action="crop" id="cropMode" title="裁剪图片">裁剪</button>
+                    <button data-action="save" id="saveDesign" title="保存设计">保存</button>
+                </div>
+            </div>
+            
+            <div class="zoom-controls">
+                <button id="zoomIn" title="放大">+</button>
+                <button id="zoomReset" title="重置缩放">100%</button>
+                <button id="zoomOut" title="缩小">-</button>
+            </div>
+            
+            <!-- 属性编辑面板 -->
+            <div class="properties-panel" id="propertiesPanel">
+                <!-- 属性会根据选中的对象动态加载 -->
+            </div>
+        </div>
+
+        <!-- 右侧图层面板 -->
+        <div class="right-panel">
+            <div class="panel-header">
+                <h2>图层</h2>
+                <div class="panel-actions">
+                    <button id="clearCanvas" title="清空画布">清空</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="layerList" class="layer-list"></div>
+            </div>
+            
+            <div class="panel-header">
+                <h2>颜色</h2>
+            </div>
+            <div class="panel-content">
+                <div class="color-picker-container">
+                    <div class="color-preset" style="background-color: #F44336;" data-color="#F44336" title="红色"></div>
+                    <div class="color-preset" style="background-color: #E91E63;" data-color="#E91E63" title="粉色"></div>
+                    <div class="color-preset" style="background-color: #9C27B0;" data-color="#9C27B0" title="紫色"></div>
+                    <div class="color-preset" style="background-color: #673AB7;" data-color="#673AB7" title="深紫色"></div>
+                    <div class="color-preset" style="background-color: #3F51B5;" data-color="#3F51B5" title="靛蓝色"></div>
+                    <div class="color-preset" style="background-color: #2196F3;" data-color="#2196F3" title="蓝色"></div>
+                    <div class="color-preset" style="background-color: #03A9F4;" data-color="#03A9F4" title="浅蓝色"></div>
+                    <div class="color-preset" style="background-color: #00BCD4;" data-color="#00BCD4" title="青色"></div>
+                    <div class="color-preset" style="background-color: #009688;" data-color="#009688" title="墨绿色"></div>
+                    <div class="color-preset" style="background-color: #4CAF50;" data-color="#4CAF50" title="绿色"></div>
+                    <div class="color-preset" style="background-color: #8BC34A;" data-color="#8BC34A" title="浅绿色"></div>
+                    <div class="color-preset" style="background-color: #CDDC39;" data-color="#CDDC39" title="黄绿色"></div>
+                    <div class="color-preset" style="background-color: #FFEB3B;" data-color="#FFEB3B" title="黄色"></div>
+                    <div class="color-preset" style="background-color: #FFC107;" data-color="#FFC107" title="琥珀色"></div>
+                    <div class="color-preset" style="background-color: #FF9800;" data-color="#FF9800" title="橙色"></div>
+                    <div class="color-preset" style="background-color: #FF5722;" data-color="#FF5722" title="深橙色"></div>
+                    <div class="color-preset" style="background-color: #795548;" data-color="#795548" title="棕色"></div>
+                    <div class="color-preset" style="background-color: #9E9E9E;" data-color="#9E9E9E" title="灰色"></div>
+                    <div class="color-preset" style="background-color: #607D8B;" data-color="#607D8B" title="蓝灰色"></div>
+                    <div class="color-preset" style="background-color: #000000;" data-color="#000000" title="黑色"></div>
+                    <input type="color" id="customColor" title="自定义颜色" value="#000000">
+                </div>
+                <div class="opacity-control">
+                    <label for="opacitySlider">透明度:</label>
+                    <input type="range" id="opacitySlider" min="0" max="100" value="100">
+                    <span id="opacityValue">100%</span>
+                </div>
+            </div>
+            
+            <!-- 实时预览面板 -->
+            <div class="preview-panel">
+                <div class="preview-title">实时预览</div>
+                <div class="preview-content">
+                    <div class="preview-transparent-bg"></div>
+                    <img id="previewImage" class="preview-image" src="" alt="预览">
+                </div>
+                <div class="preview-zoom-controls">
+                    <button id="previewZoomIn" title="放大预览">+</button>
+                    <span id="previewZoomValue">100%</span>
+                    <button id="previewZoomOut" title="缩小预览">-</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 裁剪模式遮罩 -->
+    <div id="croppingOverlay" class="cropping-overlay" style="display: none;">
+        <canvas id="croppingCanvas"></canvas>
+        <div class="cropping-controls">
+            <button id="applyCropBtn">确认裁剪</button>
+            <button id="cancelCropBtn">取消</button>
+        </div>
+    </div>
+
+    <!-- 保存设计对话框 -->
+    <div id="saveDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>保存设计</h3>
+            <div class="form-group">
+                <label for="designName">设计名称</label>
+                <input type="text" id="designName" placeholder="请输入设计名称">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="transparentExport" checked>
+                    导出为透明背景
+                </label>
+            </div>
+            <div class="form-actions">
+                <button id="saveConfirm">保存</button>
+                <button id="saveCancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 二维码扫描上传 -->
+    <div id="qrCodeDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>手机上传图片</h3>
+            <div class="qr-container" id="qrContainer">
+                <!-- 二维码将在这里生成 -->
+            </div>
+            <p>使用手机扫描二维码快速上传图片</p>
+            <div class="form-actions">
+                <button id="qrClose">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/editor.js"></script>
+</body>
+</html> 

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查看设计</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>查看设计</h1>
+            <div class="header-actions">
+                <button onclick="window.location.href='/admin.html'">返回管理后台</button>
+                <button onclick="toggleEditMode()" id="editModeBtn">进入编辑模式</button>
+                <button onclick="downloadDesign()">下载设计</button>
+                <button onclick="saveDesign()" id="saveBtn" style="display: none;">保存设计</button>
+            </div>
+        </div>
+        
+        <div class="design-viewer">
+            <!-- 编辑工具栏，默认隐藏 -->
+            <div class="toolbar" id="editToolbar" style="display: none;">
+                <div class="toolbar-group">
+                    <button onclick="addText()">添加文字</button>
+                    <button onclick="addRect()">添加矩形</button>
+                    <button onclick="addCircle()">添加圆形</button>
+                    <button onclick="uploadImage()">上传图片</button>
+                </div>
+                <div class="toolbar-group">
+                    <button onclick="deleteSelection()">删除</button>
+                    <button onclick="bringForward()">上移一层</button>
+                    <button onclick="sendBackward()">下移一层</button>
+                    <button onclick="duplicateSelection()">复制</button>
+                </div>
+                <div class="toolbar-group">
+                    <button onclick="groupSelection()">组合</button>
+                    <button onclick="ungroupSelection()">取消组合</button>
+                    <button onclick="toggleTransparentBg()" id="transparentBgBtn">透明背景</button>
+                </div>
+                <div class="color-picker-container">
+                    <input type="color" id="colorPicker" onchange="applyColor(this.value)">
+                    <div class="opacity-slider">
+                        <label for="opacitySlider">透明度:</label>
+                        <input type="range" id="opacitySlider" min="0" max="100" value="100" oninput="applyOpacity(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="designCanvas"></canvas>
+            </div>
+            
+            <!-- 属性面板，编辑模式下显示 -->
+            <div class="properties-panel" id="propertiesPanel" style="display: none;">
+                <h3>属性</h3>
+                <div id="propertyControls"></div>
+            </div>
+            
+            <div class="design-info">
+                <h2>设计信息</h2>
+                <div class="info-item">
+                    <label>设计名称：</label>
+                    <span id="designName"></span>
+                </div>
+                <div class="info-item">
+                    <label>创建时间：</label>
+                    <span id="designCreatedAt"></span>
+                </div>
+                <div class="info-item">
+                    <label>画布尺寸：</label>
+                    <span id="designSize"></span>
+                </div>
+                <div class="info-item">
+                    <label>使用模板：</label>
+                    <span id="designTemplate"></span>
+                </div>
+            </div>
+            
+            <!-- 图层面板，编辑模式下显示 -->
+            <div class="layer-panel" id="layerPanel" style="display: none;">
+                <h3>图层</h3>
+                <div class="layer-list" id="layerList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件上传隐藏输入框 -->
+    <input type="file" id="imageUpload" style="display: none;" accept="image/*">
+    
+    <!-- 保存对话框 -->
+    <div id="saveDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>保存设计</h3>
+            <div class="form-group">
+                <label>设计名称</label>
+                <input type="text" id="saveDesignName" placeholder="请输入设计名称">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="saveTransparentBg">
+                    使用透明背景
+                </label>
+            </div>
+            <div class="form-actions">
+                <button onclick="confirmSaveDesign()" class="btn">保存</button>
+                <button onclick="cancelSaveDesign()" class="btn-danger">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="/js/view-design.js"></script>
+</body>
+</html> 
